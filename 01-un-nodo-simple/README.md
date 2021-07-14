@@ -24,11 +24,13 @@ FIXME: Las unidades no tienen acceso a Internet.
 Deben existir y tener las direcciones de IP correctas las interfaces en el host:
 
 ```bash
-sudo VBoxManage hostonlyif create
-sudo VBoxManage hostonlyif ipconfig vboxnet0 --ip 192.168.33.1
+get_ip_vboxnet() { vboxmanage list hostonlyifs | awk -vIF=$1 '/^Name:[ ]*vboxnet/{if ($2 == IF ) { s=1; } else { s = 0; } } { if (s == 1 && $1 == "IPAddress:") { print $2; } }' ; }
+set_ip_vboxnet() { sudo VBoxManage hostonlyif ipconfig $1 --ip $2 ; }
 
 sudo VBoxManage hostonlyif create
-sudo VBoxManage hostonlyif ipconfig vboxnet1 --ip 192.168.44.1
+
+[ -z $(get_ip_vboxnet vboxnet0 | tr -d "\012" ) ] ||  set_ip_vboxnet vboxnet0 192.168.33.1
+[ -z $(get_ip_vboxnet vboxnet1 | tr -d "\012" ) ] ||  set_ip_vboxnet vboxnet1 192.168.44.1
 
 vboxmanage list  hostonlyifs
 
