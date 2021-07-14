@@ -170,6 +170,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
 
     cliente.vm.provision "instala_ws", type: "shell", privileged: false, path: "provision/instala-ws.sh"
+    cliente.vm.provision :reload
   end
 
 

@@ -14,4 +14,4 @@ ct_templates() {
 # main
 #
 
-ct_templates
+#ct_templates
