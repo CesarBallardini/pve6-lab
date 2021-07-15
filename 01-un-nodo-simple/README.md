@@ -16,12 +16,10 @@ Se pueden crear CT y VM desde `ws` (workstation) mediante terraform allí instal
 
 Las unidades así creadas pueden tener dirección IP en la red 192.168.44.0/24, que se puede acceder desde `ws` y desde el host de Virtualbox.
 
-FIXME: Las unidades no tienen acceso a Internet.
-
 
 # Requisitos previos
 
-Deben existir y tener las direcciones de IP correctas las interfaces en el host:
+* Deben existir y tener las direcciones de IP correctas las interfaces en el host: (FIXME: automatizar como parte de la instalación)
 
 ```bash
 get_ip_vboxnet() { vboxmanage list hostonlyifs | awk -vIF=$1 '/^Name:[ ]*vboxnet/{if ($2 == IF ) { s=1; } else { s = 0; } } { if (s == 1 && $1 == "IPAddress:") { print $2; } }' ; }
@@ -35,6 +33,17 @@ sudo VBoxManage hostonlyif create
 vboxmanage list  hostonlyifs
 
 ```
+
+* En el host, activar el IP FORWARDING y el NAT para `vboxnet1` a través de la interfaz en el host que tiene la salida a Internet: (FIXME: automatizar como parte de la instalación)
+
+```bash
+sudo sysctl -w net.ipv4.ip_forward=1
+
+sudo iptables -t filter -I FORWARD --in-interface vboxnet1 --out-interface enp4s0   --source      192.168.44.0/24 -j ACCEPT
+sudo iptables -t filter -I FORWARD --in-interface enp4s0   --out-interface vboxnet1 --destination 192.168.44.0/24 -j ACCEPT
+sudo iptables -t nat    -I POSTROUTING -o enp4s0 -j MASQUERADE
+```
+
 
 ---
 # Crear el nodo PVE
@@ -82,8 +91,8 @@ vm_template_debian_10 9002
 ```bash
 # lanza_vm_desde_template ID_TEMPLATE ID_VM HOSTNAME CONFIGURACIONES_ADICIONALES
 
-lanza_vm_desde_template 9002 5002 deb10-vm5002 "--ipconfig0 ip=192.168.44.2/24,gw=192.168.44.1"
-lanza_vm_desde_template 9001 5005 ubu20-vm5005 "--ipconfig0 ip=192.168.44.5/24,gw=192.168.44.1"
+lanza_vm_desde_template 9002 5002 deb10-vm5002 "--ipconfig0 ip=192.168.44.2/24,gw=192.168.44.1 --nameserver 8.8.8.8 --keyboard es"
+lanza_vm_desde_template 9001 5005 ubu20-vm5005 "--ipconfig0 ip=192.168.44.5/24,gw=192.168.44.1 --nameserver 8.8.8.8 --keyboard es"
 ```
 
 * conectar con las VMs
