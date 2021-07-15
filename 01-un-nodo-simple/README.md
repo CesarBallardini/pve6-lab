@@ -37,12 +37,17 @@ vboxmanage list  hostonlyifs
 * En el host, activar el IP FORWARDING y el NAT para `vboxnet1` a través de la interfaz en el host que tiene la salida a Internet: (FIXME: automatizar como parte de la instalación)
 
 ```bash
+# en mi pc de escritorio, la interfaz hacia internet es la siguiente: (cambie de manera acorde a su equipo host)
+HOST_IF_HACIA_INTERNET=enp4s0
+
 sudo sysctl -w net.ipv4.ip_forward=1
 
-sudo iptables -t filter -I FORWARD --in-interface vboxnet1 --out-interface enp4s0   --source      192.168.44.0/24 -j ACCEPT
-sudo iptables -t filter -I FORWARD --in-interface enp4s0   --out-interface vboxnet1 --destination 192.168.44.0/24 -j ACCEPT
+sudo iptables -t filter -I FORWARD --in-interface  vboxnet1 --out-interface "${HOST_IF_HACIA_INTERNET}" --source      192.168.44.0/24 -j ACCEPT
+sudo iptables -t filter -I FORWARD --out-interface vboxnet1 --in-interface  "${HOST_IF_HACIA_INTERNET}" --destination 192.168.44.0/24 -j ACCEPT
 sudo iptables -t nat    -I POSTROUTING -o enp4s0 -j MASQUERADE
 ```
+
+También es necesario configurar en el CT/VM el nameserver adecuado; puede ser 8.8.8.8 si es accesible desde el propio CT/VM, o algún nameserver corporativo..
 
 
 ---
@@ -200,7 +205,7 @@ y luego hacerlo ejecutable:
 sudo chmod a+rx /var/lib/vz/snippets/tf-deb10.hookscript.sh
 ```
 
-NOTA: esto se podría ahcer con Ansible desde `ws` accionando sobre `pve1`
+NOTA: esto se podría hacer con Ansible desde `ws` accionando sobre `pve1`
 
 * levantar la VM `ws`
 
