@@ -51,21 +51,6 @@ cd pve6-lab/01-un-nodo-simple/
 time vagrant up pve1
 ```
 
-* Configurar el bridge `vmbr0`. Usar la Web UI 
-  * https://pve1.infra.ballardini.com.ar:8006/
-  * credenciales: `root / admin`
-  * Datacenter -> pve1
-    * System -> Network -> Create
-      * Linux Bridge
-        * Name: vmbr0
-        * IPv4/CIDR: 192.168.44.11/24
-        * Gateway (IPv4): 192.168.44.1
-        * Bridge ports: eth2
-        * Comment: Red de Servicio
-      * Click en Create.
-    * Click Apply Configuration -> Do you want to apply pending network changes? -> Click Yes
-
-
 * conectar mediante SSH a `pve1` ( `vagrant ssh pve1` ) y descargar las imágenes y templates:
 
 ```bash
@@ -95,16 +80,31 @@ lanza_vm_desde_template 9001 5005 ubu20-vm5005 "--ipconfig0 ip=192.168.44.5/24,g
 * conectar con las VMs
 
 ```bash
+touch ~/.ssh/known_hosts
 
+##
+# la VM con Debian10
+#
 ssh-keygen -f ~/.ssh/known_hosts -R "192.168.44.2"
 ssh-keyscan 192.168.44.2 >> ~/.ssh/known_hosts
-sshpass -p debian ssh debian@192.168.44.2
+
+# desde host, pve1, ws
+sshpass -p debian ssh debian@192.168.44.2 # deb10-vm5002
+
+# desde pve1:
 sudo ssh -i /root/pve/pub_keys/pub_key debian@192.168.44.2 # deb10-vm5002
 
+##
+# la VM con Ubuntu 20.04
+#
 ssh-keygen -f ~/.ssh/known_hosts -R "192.168.44.5"
 ssh-keyscan 192.168.44.5 >> ~/.ssh/known_hosts
-sshpass -p ubuntu ssh ubuntu@192.168.44.5
-sudo ssh -i /root/pve/pub_keys/pub_key   root@192.168.44.5 # ubu20-vm5005
+
+# desde host, pve1, ws
+sshpass -p ubuntu ssh ubuntu@192.168.44.5 # ubu20-vm5005
+
+# desde pve1:
+sudo ssh -i /root/pve/pub_keys/pub_key   ubuntu@192.168.44.5 # ubu20-vm5005
 
 
 ```

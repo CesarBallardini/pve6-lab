@@ -176,3 +176,5 @@ sudo -E apt-get update -qq
 echo root:admin | sudo chpasswd
 
 elimina_popup_subscription
+
+/vagrant/provision/configura-bridge.sh
