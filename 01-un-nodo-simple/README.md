@@ -36,7 +36,8 @@ vboxmanage list  hostonlyifs
 
 ```
 
-# Uso
+---
+# Crear el nodo PVE
 
 * clonar el repo
 
@@ -50,6 +51,12 @@ cd pve6-lab/01-un-nodo-simple/
 ```bash
 time vagrant up pve1
 ```
+
+Ahora se puede usar la interfaz Web, la interfaz CLI, o la API para crear recursos en el nodo PVE.
+
+---
+# Descargar imágenes para VMs y templates para CTs
+
 
 * conectar mediante SSH a `pve1` ( `vagrant ssh pve1` ) y descargar las imágenes y templates:
 
@@ -67,6 +74,8 @@ vm_template_ubuntu_2004 9001
 vm_template_debian_10 9002
 
 ```
+
+# Crear VMs y CTs desde las imágenes y templates descargadas
 
 * crear VMs con Debian10 y Ubuntu20.04
 
@@ -113,7 +122,13 @@ sudo ssh -i /root/pve/pub_keys/pub_key   ubuntu@192.168.44.5 # ubu20-vm5005
 ---
 # Uso de Terraform
 
-* en `pve1` instalar el *hookscript* para permitir que root ingrese por SSH
+La VM `ws` se comporta en nuestro lab como una estación de conntrol Terraform que tiene acceso a la red de hipervisores para llegar a la API de PVE en el nodo `pve1`.
+
+Los templates de CTs no permiten el login de `root` por SSH, y tampoc tienen otra cuenta creada.  Cuando el CT se crea a partir del template, se puede ejecutar un *script* 
+por medio del cual activamos el login de `root` a través de SSH.
+
+
+* en `pve1` instalar el *hookscript* para permitir que root ingrese por SSH (FIXME: automatizar como parte de la instalación)
 
 En `/var/lib/vz/snippets/tf-deb10.hookscript.sh` poner:
 
