@@ -1,0 +1,9 @@
+tf/terraform.tfstate.backup
+tf/terraform.tfstate
+tf/.terraform.lock.hcl
+tf/.terraform/
+tf/.env
+tf/ssh-keys/
+
+tmp/
+.vagrant/

@@ -1,0 +1,256 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Para aprovechar este Vagrantfile necesita Vagrant y Virtualbox instalados:
+#
+#   * Virtualbox
+#
+#   * Vagrant
+#
+#   * Plugins de Vagrant:
+#       + vagrant-proxyconf y su configuracion si requiere de un Proxy para salir a Internet
+#       + vagrant-cachier
+#       + vagrant-disksize
+#       + vagrant-hostmanager
+#       + vagrant-reload
+#       + vagrant-share
+#       + vagrant-vbguest
+
+VAGRANTFILE_API_VERSION = "2"
+
+DOMAIN        = "infra.ballardini.com.ar"
+ROOT_PASSWORD = "admin"
+CLUSTER_NAME  = "testcluster"
+
+
+$post_up_message_pvenode = <<POST_UP_MESSAGE
+------------------------------------------------------
+Cluster Proxmox PVE: cluster con tres nodos
+
+URLS:
+ - host only - https://pve1.infra.ballardini.com.ar:8006/
+ - host only - https://192.168.33.11:8006/
+
+ - host only - https://pve2.infra.ballardini.com.ar:8006/
+ - host only - https://192.168.33.12:8006/
+
+ - host only - https://pve3.infra.ballardini.com.ar:8006/
+ - host only - https://192.168.33.13:8006/
+
+credenciales Web: root@pam / #{ROOT_PASSWORD}
+
+------------------------------------------------------
+POST_UP_MESSAGE
+
+
+$post_up_message_ws = <<POST_UP_MESSAGE
+------------------------------------------------------
+Cluster Proxmox PVE: estacion de control con Terraform
+
+ - ip address: 192.168.33.10
+
+credenciales SSH: vagrant / vagrant
+
+------------------------------------------------------
+POST_UP_MESSAGE
+
+
+pve_nodes = [
+  {
+        :hostname => "pve1",
+        :net_hipervisor => { :ip => "192.168.33.11", :name => 'vboxnet0', :adapter => 2 },
+        :net_servicio   => { :ip => "192.168.44.11", :name => 'vboxnet1', :adapter => 3, :gateway => "192.168.44.1" },
+        :post_up_message => $post_up_message_pvenode
+ },
+  {
+        :hostname => "pve2",
+        :net_hipervisor => { :ip => "192.168.33.12", :name => 'vboxnet0', :adapter => 2 },
+        :net_servicio   => { :ip => "192.168.44.12", :name => 'vboxnet1', :adapter => 3, :gateway => "192.168.44.1" },
+        :post_up_message => $post_up_message_pvenode
+ },
+  {
+        :hostname => "pve3",
+        :net_hipervisor => { :ip => "192.168.33.13", :name => 'vboxnet0', :adapter => 2 },
+        :net_servicio   => { :ip => "192.168.44.13", :name => 'vboxnet1', :adapter => 3, :gateway => "192.168.44.1" },
+        :post_up_message => $post_up_message_pvenode
+ },
+]
+
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+
+  if Vagrant.has_plugin?("vagrant-hostmanager")
+    config.hostmanager.enabled = true
+    config.hostmanager.manage_host = true
+    config.hostmanager.manage_guest = true
+    config.hostmanager.ignore_private_ip = false
+    config.hostmanager.include_offline = true
+
+    # uso cachier con NFS solamente si el hostmanager gestiona los nombres en /etc/hosts del host
+    if Vagrant.has_plugin?("vagrant-cachier")
+
+      config.cache.auto_detect = false
+      # W: Download is performed unsandboxed as root as file '/var/cache/apt/archives/partial/xyz' couldn't be accessed by user '_apt'. - pkgAcquire::Run (13: Permission denied)
+
+      config.cache.synced_folder_opts = {
+        owner: "_apt"
+      }
+      # Configure cached packages to be shared between instances of the same base box.
+      # More info on http://fgrehm.viewdocs.io/vagrant-cachier/usage
+      config.cache.scope = :box
+   end
+
+  end
+
+ pve_nodes.each do |node|
+   config.vm.define node[:hostname] do |srv|
+
+      srv.vm.box = "debian/buster64"
+
+      ## eth0: NAT network y default gateway , adapter: 1
+      ## eth1:
+      srv.vm.network "private_network", ip: node[:net_hipervisor][:ip], name: node[:net_hipervisor][:name], adapter: node[:net_hipervisor][:adapter]  # red de los hipervisores eth1
+
+      ## eth2: se sumara a vmbr0
+      srv.vm.network "private_network", ip: node[:net_servicio][:ip], name: node[:net_servicio][:name], adapter: node[:net_servicio][:adapter], auto_config: false # red de servicio eth2
+
+
+      srv.vm.post_up_message = node[:post_up_message]
+      srv.vm.boot_timeout = 300
+      srv.vm.box_check_update = true
+      srv.ssh.forward_agent = true
+      srv.ssh.forward_x11 = true
+      srv.vm.hostname = node[:hostname]
+
+      if Vagrant.has_plugin?("vagrant-hostmanager")
+        srv.hostmanager.aliases = %W(#{node[:hostname]}.#{DOMAIN} )
+      end
+
+      if Vagrant.has_plugin?("vagrant-vbguest") then
+          srv.vbguest.auto_update = true
+          srv.vbguest.no_install = false
+      end
+
+      srv.vm.synced_folder ".", "/vagrant", disabled: false, SharedFoldersEnableSymlinksCreate: false, type: :virtualbox
+
+
+      srv.vm.provider :virtualbox do |vb|
+        vb.gui = false
+        vb.cpus = 2
+        vb.memory = "3072"
+        # https://www.virtualbox.org/manual/ch08.html#vboxmanage-modifyvm mas parametros para personalizar en VB
+        vb.customize ["modifyvm", :id, "--nested-hw-virt", "on"]
+  
+        vb.customize ["modifyvm", :id, "--hostonlyadapter" + node[:net_hipervisor][:adapter].to_s, node[:net_hipervisor][:name]]  # eth1
+        vb.customize ["modifyvm", :id, "--hostonlyadapter" + node[:net_servicio][:adapter].to_s,   node[:net_servicio][:name]]    # eth2
+  
+        vb.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
+        vb.customize ["modifyvm", :id, "--nicpromisc3", "allow-all"]
+      end
+
+      srv.vm.provision "instala_ifupdown2", type: "shell" do |s|
+          s.privileged = false
+          s.inline = <<-SHELL
+            export DEBIAN_FRONTEND=noninteractive
+  
+            sudo -E apt-get install ifupdown2 -y
+            # ni se te ocurra eliminar ifupdown: se pierde el acceso SSH a la VM
+            #
+            sudo sed -i 's@source-directory /etc/network/interfaces.d@source /etc/network/interfaces.d/*@' /etc/network/interfaces
+            sudo systemctl restart networking
+          SHELL
+      end
+
+      srv.vm.provision "instala_pve", type: "shell", privileged: false, path: "provision/instala-pve6.sh",
+                        args: [ node[:hostname], DOMAIN, node[:net_hipervisor][:ip], node[:net_servicio][:ip], node[:net_servicio][:gateway], ROOT_PASSWORD ]
+
+      srv.vm.provision :reload
+      srv.vm.provision "post_instala_pve", type: "shell", privileged: false,path: "provision/post-instala-pve6.sh"
+      srv.vm.provision "crea_cluster", type: "shell", privileged: false,path: "provision/cluster-create.sh", args: [ node[:hostname], CLUSTER_NAME ]
+      srv.vm.provision "agrega_nodo",  type: "shell", privileged: false,path: "provision/cluster-addnode.expect", args: [ node[:hostname], pve_nodes[0][:net_hipervisor][:ip], ROOT_PASSWORD ]
+
+    end
+  end
+
+
+  config.vm.define "ws" do |cliente|
+
+    cliente.vm.box = "ubuntu/focal64"
+    cliente.vm.network "private_network", ip: "192.168.33.10", name: 'vboxnet0'  # red de los hipervisores enp0s8 para acceder desde pc enp0s8
+
+    cliente.vm.post_up_message = $post_up_message_ws
+    cliente.vm.boot_timeout = 180
+    cliente.vm.box_check_update = true
+    cliente.ssh.forward_agent = true
+    cliente.ssh.forward_x11 = true
+    cliente.vm.hostname = "ws"
+
+    if Vagrant.has_plugin?("vagrant-hostmanager")
+      cliente.hostmanager.aliases = %W(ws.#{DOMAIN} )
+    end
+
+    if Vagrant.has_plugin?("vagrant-vbguest") then
+        cliente.vbguest.auto_update = true
+        cliente.vbguest.no_install = false
+    end
+
+    cliente.vm.synced_folder ".", "/vagrant", disabled: false, SharedFoldersEnableSymlinksCreate: false, type: :virtualbox
+
+    cliente.vm.provider :virtualbox do |vb|
+      vb.gui = false
+      vb.cpus = 1
+      vb.memory = "1024"
+    end
+
+    cliente.vm.provision "instala_ws", type: "shell", privileged: false, path: "provision/instala-ws.sh",
+                        args: [ "root@pam", ROOT_PASSWORD ]
+
+    cliente.vm.provision :reload
+  end
+
+
+    ##
+    # Aprovisionamiento para todas las VMs, corre antes que la provision especifica de cada VM
+    #
+    config.vm.provision "fix-no-tty", type: "shell" do |s|
+        s.privileged = false
+        s.inline = "sudo sed -i '/tty/!s/mesg n/tty -s \\&\\& mesg n/' /root/.profile"
+    end
+
+    config.vm.provision "actualiza", type: "shell" do |s|  # http://foo-o-rama.com/vagrant--stdin-is-not-a-tty--fix.html
+        s.privileged = false
+        s.inline = <<-SHELL
+          export DEBIAN_FRONTEND=noninteractive
+          export APT_LISTCHANGES_FRONTEND=none
+          export APT_OPTIONS=' -y --allow-downgrades --allow-remove-essential --allow-change-held-packages -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold '
+
+          sudo -E apt-get --purge remove apt-listchanges -y > /dev/null 2>&1
+          sudo -E apt-get update -y -qq > /dev/null 2>&1
+          sudo dpkg-reconfigure --frontend=noninteractive libc6 > /dev/null 2>&1
+
+          sudo -E apt-get install linux-image-amd64 ${APT_OPTIONS}  || true
+          sudo -E apt-get upgrade ${APT_OPTIONS} > /dev/null 2>&1
+          sudo -E apt-get dist-upgrade ${APT_OPTIONS} > /dev/null 2>&1
+
+          sudo -E apt-get autoremove -y > /dev/null 2>&1
+          sudo -E apt-get autoclean -y > /dev/null 2>&1
+          sudo -E apt-get clean > /dev/null 2>&1
+        SHELL
+    end
+
+    config.vm.provision "ssh_pub_key", type: :shell do |s|
+      begin
+          ssh_pub_key = File.readlines("#{Dir.home}/.ssh/id_rsa.pub").first.strip
+          s.inline = <<-SHELL
+            mkdir -p /root/.ssh/
+            touch /root/.ssh/authorized_keys
+            echo #{ssh_pub_key} >> /home/vagrant/.ssh/authorized_keys
+            echo #{ssh_pub_key} >> /root/.ssh/authorized_keys
+          SHELL
+      rescue
+          puts "No hay claves publicas en el HOME de su pc"
+          s.inline = "echo OK sin claves publicas"
+      end
+    end
+
+end

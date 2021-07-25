@@ -1,4 +1,4 @@
-# README - Un solo nodo PVE con un bridge conectado a la red *host_only*
+# README - Un solo nodo PVE con un bridge conectado a la red `host_only`
 
 # Descripción general
 
@@ -22,6 +22,11 @@ Las unidades así creadas pueden tener dirección IP en la red 192.168.44.0/24, 
 * Deben existir y tener las direcciones de IP correctas las interfaces en el host: (FIXME: automatizar como parte de la instalación)
 
 ```bash
+vboxmanage list dhcpservers
+vboxmanage dhcpserver modify --netname HostInterfaceNetworking-vboxnet0 --disable
+VBoxManage dhcpserver remove --netname HostInterfaceNetworking-vboxnet0
+vboxmanage list dhcpservers
+
 get_ip_vboxnet() { vboxmanage list hostonlyifs | awk -vIF=$1 '/^Name:[ ]*vboxnet/{if ($2 == IF ) { s=1; } else { s = 0; } } { if (s == 1 && $1 == "IPAddress:") { print $2; } }' ; }
 set_ip_vboxnet() { sudo VBoxManage hostonlyif ipconfig $1 --ip $2 ; }
 
