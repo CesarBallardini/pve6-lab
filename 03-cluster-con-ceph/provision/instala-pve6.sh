@@ -6,7 +6,8 @@ pvenode_domain=$2
 pvenode_ip_address=$3
 pvenode_servicio_ip=$4
 pvenode_servicio_gw=$5
-pvenode_root_password=$6
+pvenode_ceph_address=$6
+pvenode_root_password=$7
 
 export DEBIAN_FRONTEND=noninteractive
 export APT_LISTCHANGES_FRONTEND=none
@@ -185,5 +186,5 @@ echo root:${pvenode_root_password} | sudo chpasswd
 
 elimina_popup_subscription
 
-/vagrant/provision/configura-bridge.sh ${pvenode_hostname} ${pvenode_domain} ${pvenode_ip_address} ${pvenode_servicio_ip} ${pvenode_servicio_gw}
+/vagrant/provision/configura-bridge.sh ${pvenode_hostname} ${pvenode_domain} ${pvenode_ip_address} ${pvenode_servicio_ip} ${pvenode_servicio_gw} ${pvenode_ceph_address}
 
