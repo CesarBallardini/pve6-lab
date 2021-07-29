@@ -1,0 +1,30 @@
+#!/usr/bin/expect -f
+
+set pve_hostname [lindex $argv 0];
+set pve_node_ip [lindex $argv 1];
+set pve_cluster_ip [lindex $argv 2];
+set pve_cluster_password [lindex $argv 3];
+
+if { [ string compare $pve_hostname "pve1" ] == 0 } {
+  return 0
+}
+
+set force_conservative 0  ;# set to 1 to force conservative mode even if
+			  ;# script wasn't run conservatively originally
+if {$force_conservative} {
+	set send_slow {1 .1}
+	proc send {ignore arg} {
+		sleep .1
+		exp_send -s -- $arg
+	}
+}
+
+set timeout -1
+spawn sudo pvecm add $pve_cluster_ip -link0 $pve_node_ip
+match_max 100000
+expect "Please enter superuser (root) password for"
+send -- "$pve_cluster_password\r"
+send -- "\r"
+expect "Are you sure you want to continue connecting (yes/no)? "
+send -- "yes\r\r"
+expect eof
